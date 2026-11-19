@@ -215,6 +215,7 @@ app = dash.Dash(
     external_stylesheets=[dbc.themes.DARKLY],
     title="Finance Dashboard",
 )
+server = app.server  # WSGI entry point for gunicorn
 
 app.layout = dbc.Container([
     html.H2("Finance Dashboard", className="my-4"),

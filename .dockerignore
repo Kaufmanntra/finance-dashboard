@@ -1,0 +1,9 @@
+.git
+.venv
+.vscode
+.env
+Import Data
+**/__pycache__
+*.pyc
+*.pyo
+*.sql.gz
