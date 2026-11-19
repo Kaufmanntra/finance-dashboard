@@ -5,9 +5,10 @@ Run with: python app.py
 
 import dash
 import dash_bootstrap_components as dbc
-from dash import dash_table, dcc, html
-
+from dash import Input, Output, dash_table, dcc, html
+import pandas as pd
 import plotly.graph_objects as go
+from sqlalchemy import text
 
 from db.connection import get_engine
 from analytics.cashflow import category_breakdown, monthly_by_category, monthly_summary
@@ -20,6 +21,31 @@ df_monthly = monthly_summary(engine)
 df_categories = category_breakdown(engine, months=3)
 df_recurring = detect_recurring(engine)
 df_monthly_cat = monthly_by_category(engine)
+
+# ── Deep Dive dropdown options ────────────────────────────────────────────────
+
+with engine.connect() as _conn:
+    _months_df = pd.read_sql(text("""
+        SELECT DISTINCT TO_CHAR(DATE_TRUNC('month', date), 'YYYY-MM') AS month
+        FROM transactions
+        ORDER BY month DESC
+    """), _conn)
+    _cats_df = pd.read_sql(text("""
+        SELECT category, COUNT(*) AS cnt
+        FROM transactions
+        WHERE amount < 0
+        GROUP BY category
+        ORDER BY category
+    """), _conn)
+
+dd_month_options = [{"label": m, "value": m} for m in _months_df["month"]]
+dd_month_default = _months_df["month"].iloc[0] if not _months_df.empty else None
+
+dd_cat_options = [{"label": c, "value": c} for c in _cats_df["category"]]
+dd_cat_default = (
+    _cats_df.loc[_cats_df["cnt"].idxmax(), "category"]
+    if not _cats_df.empty else None
+)
 
 # ── KPI calculations ──────────────────────────────────────────────────────────
 
@@ -229,7 +255,108 @@ app.layout = dbc.Container([
         ])),
     ), className="mb-4"),
 
+    # Deep Dive
+    dbc.Row(dbc.Col(
+        dbc.Card(dbc.CardBody([
+            html.H6("Deep Dive", className="mb-3"),
+            dbc.Row([
+                dbc.Col(
+                    dcc.Dropdown(
+                        id="dd-month",
+                        options=dd_month_options,
+                        value=dd_month_default,
+                        clearable=False,
+                        style={"color": "#000"},
+                    ),
+                    xs=12, md=3,
+                ),
+                dbc.Col(
+                    dcc.Dropdown(
+                        id="dd-category",
+                        options=dd_cat_options,
+                        value=dd_cat_default,
+                        clearable=False,
+                        style={"color": "#000"},
+                    ),
+                    xs=12, md=3,
+                ),
+            ], className="mb-3 g-2"),
+            dash_table.DataTable(
+                id="deep-dive-table",
+                style_table={"overflowX": "auto"},
+                style_header={
+                    "backgroundColor": "#333",
+                    "color": FONT_COLOR,
+                    "fontWeight": "bold",
+                    "border": "1px solid #444",
+                },
+                style_cell={
+                    "backgroundColor": PLOT_BGCOLOR,
+                    "color": FONT_COLOR,
+                    "border": "1px solid #444",
+                    "padding": "8px 12px",
+                    "textAlign": "left",
+                },
+                style_cell_conditional=[{
+                    "if": {"column_id": "amount"},
+                    "textAlign": "right",
+                }],
+                style_data_conditional=[
+                    {"if": {"row_index": "odd"}, "backgroundColor": "#2a2a2a"},
+                    {"if": {"filter_query": '{date} = "Total"'},
+                     "fontWeight": "bold", "color": "#f39c12", "backgroundColor": "#2b2b2b"},
+                ],
+                page_size=50,
+            ),
+        ])),
+    ), className="mb-4"),
+
 ], fluid=True)
+
+
+# ── Callbacks ─────────────────────────────────────────────────────────────────
+
+@app.callback(
+    Output("deep-dive-table", "data"),
+    Output("deep-dive-table", "columns"),
+    Input("dd-month", "value"),
+    Input("dd-category", "value"),
+)
+def update_deep_dive(month: str, category: str):
+    if not month or not category:
+        return [], []
+
+    sql = text("""
+        SELECT
+            date::text      AS date,
+            bank,
+            description,
+            amount
+        FROM transactions
+        WHERE TO_CHAR(DATE_TRUNC('month', date), 'YYYY-MM') = :month
+          AND category = :category
+        ORDER BY date DESC
+    """)
+
+    with engine.connect() as conn:
+        df = pd.read_sql(sql, conn, params={"month": month, "category": category})
+
+    if df.empty:
+        return [], []
+
+    total = df["amount"].sum()
+    df["amount"] = df["amount"].apply(lambda x: f"€{x:,.2f}")
+
+    totals_row = {"date": "Total", "bank": "", "description": "", "amount": f"€{total:,.2f}"}
+    records = df.to_dict("records") + [totals_row]
+
+    columns = [
+        {"name": "Date",        "id": "date"},
+        {"name": "Bank",        "id": "bank"},
+        {"name": "Description", "id": "description"},
+        {"name": "Amount",      "id": "amount"},
+    ]
+    return records, columns
 
 
 if __name__ == "__main__":
