@@ -1,9 +1,7 @@
 .venv/
 .env
-import data/
+Import Data/
 .vscode/settings.json
-__pycache__/
-
 __pycache__/
 *.pyc
 *.pyo
