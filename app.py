@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from sqlalchemy import text
 
+from auth import init_basic_auth
 from db.connection import get_engine
 from analytics.cashflow import category_breakdown, monthly_by_category, monthly_summary
 from analytics.subscriptions import detect_recurring
@@ -216,6 +217,7 @@ app = dash.Dash(
     title="Finance Dashboard",
 )
 server = app.server  # WSGI entry point for gunicorn
+init_basic_auth(server)
 
 app.layout = dbc.Container([
     html.H2("Finance Dashboard", className="my-4"),

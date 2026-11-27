@@ -21,7 +21,7 @@ Python 3.12 · pandas · PostgreSQL · SQLAlchemy / psycopg2 · Dash + Plotly ·
 ## Quick start with Docker
 
 ```bash
-cp .env.example .env        # set a strong DB_PASSWORD
+cp .env.example .env        # set a strong DB_PASSWORD and DASH_PASSWORD
 docker compose up -d --build
 ```
 
@@ -77,9 +77,15 @@ app.py                   Dash app
 
 ## Security
 
-The dashboard has **no authentication**. Do not expose port 8050 to the
-internet. Run it on your local network or reach it through a VPN
-(e.g. WireGuard or Tailscale).
+The dashboard is protected by **HTTP Basic Auth**. Set `DASH_USER` and
+`DASH_PASSWORD` in `.env`; the app refuses to start without them. The browser
+asks for the login once and remembers it until it is closed.
+
+Basic Auth over plain HTTP sends the password unencrypted, so anyone who can
+sniff traffic on your network could read it. That is acceptable on a trusted
+home network; for more protection put a reverse proxy with TLS (e.g. Caddy)
+in front of the app. Do not expose port 8050 to the internet. From outside,
+reach it through a VPN (e.g. WireGuard or Tailscale).
 
 Keep `.env` and your bank exports out of version control. Both are already
 listed in `.gitignore`.
